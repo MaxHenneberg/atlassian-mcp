@@ -1,0 +1,9 @@
+target/
+.m2-cache/
+.idea/
+.ai/
+*.iml
+.env
+*.log
+*.tar
+*.zip

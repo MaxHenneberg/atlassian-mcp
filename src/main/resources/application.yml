@@ -1,0 +1,26 @@
+spring:
+  main:
+    banner-mode: "off"
+    web-application-type: servlet
+  application:
+    name: jira-mcp-server
+
+server:
+  address: ${SERVER_ADDRESS:0.0.0.0}
+  port: ${PORT:8080}
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level %logger{36} - %msg%n"
+  level:
+    root: INFO
+    dev.henne.jiramcp: DEBUG
+    org.springframework: WARN
+    reactor.netty: WARN
+
+jira:
+  base-url: ${JIRA_BASE_URL:}
+  pat: ${JIRA_PAT:}
+  email: ${JIRA_EMAIL:}
+  auth-mode: ${JIRA_AUTH_MODE:bearer}
+  api-version: ${JIRA_API_VERSION:3}
