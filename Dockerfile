@@ -7,5 +7,6 @@ RUN mvn -q -DskipTests package
 FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
 COPY --from=build /workspace/target/jira-mcp-server-*.jar /app/jira-mcp-server.jar
+COPY mcp-tools.json /app/mcp-tools.json
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/app/jira-mcp-server.jar"]

@@ -2,6 +2,7 @@ package dev.henne.jiramcp.mcp;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import dev.henne.jiramcp.config.McpToolExposure;
 import dev.henne.jiramcp.tools.ConfluenceTools;
 import dev.henne.jiramcp.tools.JiraTools;
 import org.junit.jupiter.api.Test;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -17,10 +19,12 @@ class McpProtocolHandlerTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final JiraTools jiraTools = mock(JiraTools.class);
     private final ConfluenceTools confluenceTools = mock(ConfluenceTools.class);
-    private final McpProtocolHandler handler = new McpProtocolHandler(objectMapper, jiraTools, confluenceTools);
+    private final McpToolExposure toolExposure = mock(McpToolExposure.class);
+    private final McpProtocolHandler handler = new McpProtocolHandler(objectMapper, jiraTools, confluenceTools, toolExposure);
 
     @Test
     void listsJiraGetIssueTool() {
+        when(toolExposure.isExposed(anyString())).thenReturn(true);
         ObjectNode request = request(1, "tools/list");
 
         var response = handler.handle(request);
@@ -36,6 +40,7 @@ class McpProtocolHandlerTest {
 
     @Test
     void callsJiraGetIssueTool() {
+        when(toolExposure.isExposed(anyString())).thenReturn(true);
         ObjectNode issue = objectMapper.createObjectNode();
         issue.put("key", "PROJ-123");
         when(jiraTools.getIssue("PROJ-123", List.of("summary", "status"))).thenReturn(issue);
@@ -57,6 +62,7 @@ class McpProtocolHandlerTest {
 
     @Test
     void callsConfluenceSearchTool() {
+        when(toolExposure.isExposed(anyString())).thenReturn(true);
         ObjectNode results = objectMapper.createObjectNode();
         results.putArray("results").addObject().put("title", "Runbook");
         when(confluenceTools.search("siteSearch ~ \"runbook\" AND type = page", 5)).thenReturn(results);
@@ -76,6 +82,7 @@ class McpProtocolHandlerTest {
 
     @Test
     void callsConfluenceListSpacesTool() {
+        when(toolExposure.isExposed(anyString())).thenReturn(true);
         ObjectNode spaces = objectMapper.createObjectNode();
         spaces.putArray("results").addObject().put("key", "DEV");
         when(confluenceTools.listSpaces(10)).thenReturn(spaces);
@@ -89,6 +96,34 @@ class McpProtocolHandlerTest {
 
         assertThat(response.path("result").path("isError").asBoolean()).isFalse();
         assertThat(response.path("result").path("content").get(0).path("text").asText()).contains("\"key\" : \"DEV\"");
+    }
+
+    @Test
+    void listsOnlyExposedTools() {
+        when(toolExposure.isExposed("jira_get_issue")).thenReturn(true);
+        when(toolExposure.isExposed("confluence_search")).thenReturn(true);
+
+        var response = handler.handle(request(5, "tools/list"));
+
+        assertThat(response.path("result").path("tools").findValuesAsText("name"))
+                .containsExactly("jira_get_issue", "confluence_search");
+    }
+
+    @Test
+    void rejectsKnownToolThatIsNotExposed() {
+        when(toolExposure.isExposed("jira_add_comment")).thenReturn(false);
+
+        ObjectNode request = request(6, "tools/call");
+        ObjectNode params = request.putObject("params");
+        params.put("name", "jira_add_comment");
+        params.putObject("arguments")
+                .put("issueKey", "PROJ-123")
+                .put("comment", "hidden");
+
+        var response = handler.handle(request);
+
+        assertThat(response.path("error").path("code").asInt()).isEqualTo(-32602);
+        assertThat(response.path("error").path("message").asText()).contains("Tool is not exposed by config");
     }
 
     @Test

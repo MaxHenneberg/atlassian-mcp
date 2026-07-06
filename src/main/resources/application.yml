@@ -24,3 +24,7 @@ jira:
   email: ${JIRA_EMAIL:}
   auth-mode: ${JIRA_AUTH_MODE:bearer}
   api-version: ${JIRA_API_VERSION:3}
+
+mcp:
+  tools:
+    config-file: ${MCP_TOOLS_CONFIG:mcp-tools.json}

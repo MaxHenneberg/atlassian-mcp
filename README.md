@@ -12,7 +12,9 @@ Implemented tool:
 
 ## Configuration
 
-All runtime configuration is supplied through environment variables.
+Atlassian credentials and server settings are supplied through environment
+variables. MCP tool exposure is supplied through a JSON file selected by
+`MCP_TOOLS_CONFIG`.
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
@@ -21,6 +23,7 @@ All runtime configuration is supplied through environment variables.
 | `JIRA_AUTH_MODE` | no | `bearer` | `bearer` for Jira Server/Data Center PATs, `basic` for Jira Cloud |
 | `JIRA_EMAIL` | only for `basic` | | Atlassian account email for Jira Cloud basic auth |
 | `JIRA_API_VERSION` | no | `3` | Jira REST API version in `/rest/api/{version}` |
+| `MCP_TOOLS_CONFIG` | no | `mcp-tools.json` | Path to the JSON file that explicitly exposes MCP tools |
 
 With the default `bearer` mode, authentication uses:
 
@@ -29,6 +32,50 @@ Authorization: Bearer <JIRA_PAT>
 ```
 
 That matches Jira Server/Data Center PAT usage. For Jira Cloud (`*.atlassian.net`), use `JIRA_AUTH_MODE=basic`, `JIRA_EMAIL`, and an Atlassian API token as `JIRA_PAT`.
+
+## MCP Tool Exposure Config
+
+The server reads one JSON config file during startup. Only tools listed in this
+file are exposed through `tools/list` and accepted by `tools/call`.
+
+Jira and Confluence tools are configured in separate sections, but in the same
+file. A tool in the wrong section or an unknown tool name fails startup.
+
+Complete config with all currently implemented tools enabled:
+
+```json
+{
+  "jira": {
+    "tools": [
+      "jira_get_issue",
+      "jira_add_comment",
+      "jira_transition_issue"
+    ]
+  },
+  "confluence": {
+    "tools": [
+      "confluence_list_spaces",
+      "confluence_search"
+    ]
+  }
+}
+```
+
+To expose only read-only Jira and Confluence search, for example:
+
+```json
+{
+  "jira": {
+    "tools": ["jira_get_issue"]
+  },
+  "confluence": {
+    "tools": ["confluence_search"]
+  }
+}
+```
+
+If a section is omitted, no tools from that product are exposed. If a section is
+present, it must contain an explicit `tools` array.
 
 ## Build
 
@@ -54,8 +101,10 @@ with `PORT`.
 ```bash
 docker run --rm -i \
   -p 8080:8080 \
+  -v "$PWD/mcp-tools.json:/config/mcp-tools.json:ro" \
   -e JIRA_BASE_URL=https://jira.example.com \
   -e JIRA_PAT=your-token \
+  -e MCP_TOOLS_CONFIG=/config/mcp-tools.json \
   jira-mcp-server:latest
 ```
 
@@ -69,6 +118,26 @@ JIRA_AUTH_MODE=basic
 JIRA_EMAIL=your.atlassian.email@example.com
 JIRA_PAT=your-atlassian-api-token
 PORT=8080
+```
+
+Place your tool exposure JSON as `mcp-tools.json` in the same directory as
+`compose.yaml`. With the repository layout this means:
+
+```text
+atlassian-mcp/
+  compose.yaml
+  mcp-tools.json
+```
+
+The provided Compose file uses `./mcp-tools.json`, so the path is resolved
+relative to the directory containing `compose.yaml` when you run
+`docker compose up`. It mounts the file read-only into the container:
+
+```yaml
+volumes:
+  - ./mcp-tools.json:/config/mcp-tools.json:ro
+environment:
+  MCP_TOOLS_CONFIG: /config/mcp-tools.json
 ```
 
 Then start the server:
@@ -94,12 +163,18 @@ For Jira Cloud:
 ```bash
 docker run --rm -i \
   -p 8080:8080 \
+  -v "$PWD/mcp-tools.json:/config/mcp-tools.json:ro" \
   -e JIRA_BASE_URL=https://henneberg.atlassian.net \
   -e JIRA_AUTH_MODE=basic \
   -e JIRA_EMAIL=your.atlassian.email@example.com \
   -e JIRA_PAT=your-atlassian-api-token \
+  -e MCP_TOOLS_CONFIG=/config/mcp-tools.json \
   jira-mcp-server:latest
 ```
+
+The Docker image also contains the repository's `mcp-tools.json` at
+`/app/mcp-tools.json`, which enables all tools. Mount your own file and set
+`MCP_TOOLS_CONFIG` when you want a different exposure policy.
 
 ## Smoke Test
 

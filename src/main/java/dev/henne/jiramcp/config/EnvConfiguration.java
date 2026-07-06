@@ -10,7 +10,7 @@ class EnvConfiguration {
     @Bean
     ApplicationRunner requireEnvBackedConfiguration(JiraProperties jiraProperties) {
         return args -> {
-            // Forces validation at startup and keeps all runtime configuration env-driven.
+            // Forces validation of environment-backed Atlassian configuration at startup.
         };
     }
 }

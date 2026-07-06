@@ -12,4 +12,7 @@ services:
       JIRA_EMAIL: "${JIRA_EMAIL:?Set JIRA_EMAIL to your Atlassian account email}"
       JIRA_PAT: "${JIRA_PAT:?Set JIRA_PAT to your Atlassian API token}"
       JIRA_API_VERSION: "${JIRA_API_VERSION:-3}"
+      MCP_TOOLS_CONFIG: "/config/mcp-tools.json"
+    volumes:
+      - ./mcp-tools.json:/config/mcp-tools.json:ro
     restart: unless-stopped

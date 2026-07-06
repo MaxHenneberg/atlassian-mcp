@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import dev.henne.jiramcp.config.McpToolExposure;
 import dev.henne.jiramcp.tools.ConfluenceTools;
 import dev.henne.jiramcp.tools.JiraTools;
 import org.slf4j.Logger;
@@ -14,25 +15,33 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 
+import static dev.henne.jiramcp.mcp.McpToolCatalog.TOOL_ADD_COMMENT;
+import static dev.henne.jiramcp.mcp.McpToolCatalog.TOOL_GET_ISSUE;
+import static dev.henne.jiramcp.mcp.McpToolCatalog.TOOL_LIST_CONFLUENCE_SPACES;
+import static dev.henne.jiramcp.mcp.McpToolCatalog.TOOL_SEARCH_CONFLUENCE;
+import static dev.henne.jiramcp.mcp.McpToolCatalog.TOOL_TRANSITION_ISSUE;
+
 @Component
 public class McpProtocolHandler {
 
     private static final Logger log = LoggerFactory.getLogger(McpProtocolHandler.class);
     private static final String PROTOCOL_VERSION = "2025-06-18";
-    private static final String TOOL_GET_ISSUE = "jira_get_issue";
-    private static final String TOOL_ADD_COMMENT = "jira_add_comment";
-    private static final String TOOL_TRANSITION_ISSUE = "jira_transition_issue";
-    private static final String TOOL_LIST_CONFLUENCE_SPACES = "confluence_list_spaces";
-    private static final String TOOL_SEARCH_CONFLUENCE = "confluence_search";
 
     private final ObjectMapper objectMapper;
     private final JiraTools jiraTools;
     private final ConfluenceTools confluenceTools;
+    private final McpToolExposure toolExposure;
 
-    public McpProtocolHandler(ObjectMapper objectMapper, JiraTools jiraTools, ConfluenceTools confluenceTools) {
+    public McpProtocolHandler(
+            ObjectMapper objectMapper,
+            JiraTools jiraTools,
+            ConfluenceTools confluenceTools,
+            McpToolExposure toolExposure
+    ) {
         this.objectMapper = objectMapper;
         this.jiraTools = jiraTools;
         this.confluenceTools = confluenceTools;
+        this.toolExposure = toolExposure;
     }
 
     public JsonNode handle(JsonNode request) {
@@ -70,23 +79,37 @@ public class McpProtocolHandler {
         ObjectNode serverInfo = result.putObject("serverInfo");
         serverInfo.put("name", "jira-mcp-server");
         serverInfo.put("version", "0.1.0");
-        result.put("instructions", "Atlassian MCP server with strictly separated Jira and Confluence tools. Use jira_get_issue, jira_add_comment, and jira_transition_issue for Jira work items. Use confluence_list_spaces and confluence_search only for Confluence spaces and content.");
+        result.put("instructions", "Atlassian MCP server with strictly separated Jira and Confluence tools. Only tools exposed by the server config are available. Use tools/list before tools/call.");
         return result;
     }
 
     private ObjectNode toolsListResult() {
         ObjectNode result = objectMapper.createObjectNode();
         ArrayNode tools = result.putArray("tools");
-        addJiraGetIssueTool(tools);
-        addJiraAddCommentTool(tools);
-        addJiraTransitionIssueTool(tools);
-        addConfluenceListSpacesTool(tools);
-        addConfluenceSearchTool(tools);
+        if (toolExposure.isExposed(TOOL_GET_ISSUE)) {
+            addJiraGetIssueTool(tools);
+        }
+        if (toolExposure.isExposed(TOOL_ADD_COMMENT)) {
+            addJiraAddCommentTool(tools);
+        }
+        if (toolExposure.isExposed(TOOL_TRANSITION_ISSUE)) {
+            addJiraTransitionIssueTool(tools);
+        }
+        if (toolExposure.isExposed(TOOL_LIST_CONFLUENCE_SPACES)) {
+            addConfluenceListSpacesTool(tools);
+        }
+        if (toolExposure.isExposed(TOOL_SEARCH_CONFLUENCE)) {
+            addConfluenceSearchTool(tools);
+        }
         return result;
     }
 
     private ObjectNode callTool(JsonNode params) throws JsonProcessingException {
         String name = params.path("name").asText();
+        if (McpToolCatalog.isKnownTool(name) && !toolExposure.isExposed(name)) {
+            throw new IllegalArgumentException("Tool is not exposed by config: " + name);
+        }
+
         JsonNode arguments = params.path("arguments");
         JsonNode toolResult = switch (name) {
             case TOOL_GET_ISSUE -> {

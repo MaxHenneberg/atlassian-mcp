@@ -1,0 +1,11 @@
+{
+  "jira": {
+    "tools": [
+      "jira_get_issue"
+    ]
+  },
+  "confluence": {
+    "tools": [
+    ]
+  }
+}
